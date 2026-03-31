@@ -1,0 +1,6 @@
+process_log.txt
+watch_log.txt
+app_log.txt
+__pycache__/
+*.pyc
+.env

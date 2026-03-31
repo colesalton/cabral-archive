@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amilcar Cabral Archive</title>
+<style>
+  :root{--bg:#1a1a2e;--panel:#16213e;--card:#0f3460;--accent:#e94560;--text:#eaeaea;--muted:#8892a0;--green:#4caf50;--blue:#2196f3}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh}
+  header{background:var(--panel);padding:16px 24px;display:flex;align-items:center;gap:16px;border-bottom:2px solid var(--accent)}
+  header h1{font-size:1.3rem;font-weight:700;color:var(--accent)}
+  header .stats{margin-left:auto;font-size:.85rem;color:var(--muted)}
+  .tabs{display:flex;gap:0;background:var(--panel);border-bottom:1px solid #333}
+  .tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-size:.9rem;transition:.2s}
+  .tab.active{border-bottom-color:var(--accent);color:var(--text)}
+  .layout{display:flex;height:calc(100vh - 100px)}
+  .sidebar{width:320px;background:var(--panel);padding:16px;overflow-y:auto;border-right:1px solid #333;flex-shrink:0}
+  .main{flex:1;overflow-y:auto;padding:16px}
+
+  /* Search controls */
+  .search-box{width:100%;padding:10px 14px;background:#0d1b2a;border:1px solid #334;border-radius:6px;color:var(--text);font-size:.95rem;outline:none}
+  .search-box:focus{border-color:var(--accent)}
+  .filter-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .filter-row input,.filter-row select{flex:1;padding:6px 10px;background:#0d1b2a;border:1px solid #334;border-radius:4px;color:var(--text);font-size:.82rem;min-width:80px}
+  .btn{padding:7px 14px;border-radius:4px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;transition:.15s}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:#c73350}
+  .btn-sm{padding:3px 8px;font-size:.75rem;border-radius:3px}
+  .btn-tag{background:#1e3a5f;color:var(--blue);border:1px solid var(--blue)}
+  .btn-tag:hover{background:var(--blue);color:#fff}
+
+  /* Cards */
+  .results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  .card{background:var(--card);border-radius:8px;overflow:hidden;cursor:pointer;transition:.2s;border:1px solid transparent}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .card.cover{border-left:3px solid var(--accent)}
+  .card img{width:100%;height:180px;object-fit:cover;background:#0d1b2a}
+  .card-body{padding:10px 12px}
+  .card-meta{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+  .badge{padding:2px 6px;border-radius:3px;font-size:.72rem;font-weight:700}
+  .badge-cover{background:var(--accent);color:#fff}
+  .badge-group{background:#1e3a5f;color:var(--blue)}
+  .badge-lang{background:#1a3a2a;color:var(--green)}
+  .badge-date{background:#2a1a3a;color:#bb86fc}
+  .card-subject{font-size:.82rem;color:var(--muted);margin-bottom:4px;line-height:1.4}
+  .card-snippet{font-size:.78rem;color:#666;font-style:italic;line-height:1.35;max-height:48px;overflow:hidden}
+  .tags-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+  .tag{padding:2px 7px;background:#0d2137;border:1px solid #2a4a6a;border-radius:10px;font-size:.72rem;color:var(--blue)}
+
+  /* Group list */
+  .group-item{background:var(--card);border-radius:6px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:.2s;border-left:3px solid var(--accent)}
+  .group-item:hover{background:#1a4a7a}
+  .group-title{font-size:.9rem;font-weight:600;margin-bottom:4px}
+  .group-meta{font-size:.78rem;color:var(--muted)}
+
+  /* Detail panel */
+  .detail{position:fixed;top:0;right:0;width:50vw;height:100vh;background:var(--panel);border-left:2px solid var(--accent);z-index:100;display:flex;flex-direction:column;transform:translateX(100%);transition:.3s}
+  .detail.open{transform:translateX(0)}
+  .detail-header{padding:14px 16px;background:var(--card);display:flex;align-items:center;gap:10px}
+  .detail-header h2{font-size:1rem;flex:1}
+  .detail-close{background:none;border:none;color:var(--text);font-size:1.4rem;cursor:pointer;padding:0 4px}
+  .detail-body{flex:1;overflow-y:auto;padding:16px;display:flex;gap:16px}
+  .detail-img{width:50%;flex-shrink:0}
+  .detail-img img{width:100%;border-radius:6px;border:1px solid #333}
+  .detail-img a{display:block;text-align:center;margin-top:6px;color:var(--blue);font-size:.8rem}
+  .detail-info{flex:1;overflow-y:auto}
+  .info-section{margin-bottom:14px}
+  .info-section h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;border-bottom:1px solid #333;padding-bottom:4px}
+  .transcription-box{background:#0d1b2a;border-radius:4px;padding:10px;font-size:.8rem;line-height:1.5;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:#ccc}
+  .translation-box{background:#0a1f0a;border-radius:4px;padding:10px;font-size:.8rem;line-height:1.5;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:#b8e6b8}
+  .tag-input-row{display:flex;gap:6px;margin-top:6px}
+  .tag-input{flex:1;padding:5px 8px;background:#0d1b2a;border:1px solid #334;border-radius:4px;color:var(--text);font-size:.82rem}
+  textarea.note-input{width:100%;padding:6px 8px;background:#0d1b2a;border:1px solid #334;border-radius:4px;color:var(--text);font-size:.82rem;resize:vertical;min-height:60px}
+  .date-input{padding:5px 8px;background:#0d1b2a;border:1px solid #334;border-radius:4px;color:var(--text);font-size:.82rem;width:140px}
+
+  .loading{text-align:center;padding:40px;color:var(--muted)}
+  .empty{text-align:center;padding:60px;color:var(--muted)}
+  .pagination{display:flex;gap:8px;justify-content:center;padding:16px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📜 Amilcar Cabral Archive</h1>
+  <div class="stats" id="stats-bar">Loading...</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('search')">🔍 Search Photos</div>
+  <div class="tab" onclick="switchTab('groups')">📁 File Groups</div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div id="search-controls">
+      <input class="search-box" id="search-q" placeholder="Search transcriptions, subjects, tags…" oninput="debounceSearch()">
+      <div class="filter-row">
+        <input id="date-from" type="text" placeholder="Date from (1960)" oninput="debounceSearch()">
+        <input id="date-to"   type="text" placeholder="Date to (1975)"   oninput="debounceSearch()">
+      </div>
+      <div class="filter-row">
+        <select id="filter-lang" onchange="doSearch()">
+          <option value="">All languages</option>
+          <option value="Portuguese">Portuguese</option>
+          <option value="French">French</option>
+          <option value="English">English</option>
+          <option value="Creole">Creole</option>
+        </select>
+        <select id="filter-cover" onchange="doSearch()">
+          <option value="">All pages</option>
+          <option value="1">Cover sheets only</option>
+        </select>
+      </div>
+      <div class="filter-row" style="margin-top:8px">
+        <button class="btn btn-primary" onclick="doSearch()">Search</button>
+        <button class="btn" style="background:#333;color:#fff" onclick="clearSearch()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <div id="tab-search">
+      <div id="results-info" style="font-size:.82rem;color:var(--muted);margin-bottom:10px"></div>
+      <div class="results-grid" id="results-grid"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+    <div id="tab-groups" style="display:none">
+      <div id="groups-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail" id="detail-panel">
+  <div class="detail-header">
+    <h2 id="detail-title">Photo Detail</h2>
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="detail-body">
+    <div class="detail-img">
+      <img id="detail-img" src="" alt="Document">
+      <a id="detail-link" href="#" target="_blank">Open in Google Photos ↗</a>
+    </div>
+    <div class="detail-info" id="detail-info"></div>
+  </div>
+</div>
+
+<script>
+let currentOffset = 0;
+const PAGE_SIZE   = 48;
+let searchTimer   = null;
+let currentPhoto  = null;
+let photoMap      = {};
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const s = await fetch('/api/stats').then(r=>r.json());
+  document.getElementById('stats-bar').innerHTML =
+    `${s.processed}/${s.total} processed &nbsp;|&nbsp; ${s.groups} groups &nbsp;|&nbsp; ${s.covers} covers &nbsp;|&nbsp; ${s.pending} pending`;
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 350);
+}
+
+function clearSearch() {
+  document.getElementById('search-q').value='';
+  document.getElementById('date-from').value='';
+  document.getElementById('date-to').value='';
+  document.getElementById('filter-lang').value='';
+  document.getElementById('filter-cover').value='';
+  currentOffset=0; doSearch();
+}
+
+async function doSearch(offset=0) {
+  currentOffset = offset;
+  const q    = document.getElementById('search-q').value;
+  const df   = document.getElementById('date-from').value;
+  const dt   = document.getElementById('date-to').value;
+  const lang = document.getElementById('filter-lang').value;
+  const cov  = document.getElementById('filter-cover').value;
+  const params = new URLSearchParams({q,date_from:df,date_to:dt,language:lang,cover_only:cov,limit:PAGE_SIZE,offset});
+  const data = await fetch('/api/search?'+params).then(r=>r.json());
+  renderResults(data, offset);
+}
+
+function renderResults(data, offset) {
+  const grid = document.getElementById('results-grid');
+  const info = document.getElementById('results-info');
+  info.textContent = `${data.total} results`;
+
+  photoMap = {};
+  data.results.forEach(p => photoMap[p.id] = p);
+
+  grid.innerHTML = data.results.map(p => `
+    <div class="card ${p.is_cover?'cover':''}" onclick="openDetail(${p.id})">
+      <img src="${p.image_url.replace('=w4096','=w400')}" loading="lazy" onerror="this.style.background='#0d2137'">
+      <div class="card-body">
+        <div class="card-meta">
+          ${p.is_cover ? '<span class="badge badge-cover">COVER</span>' : ''}
+          ${p.file_group ? `<span class="badge badge-group">File ${p.file_group}${p.cover_code?' · '+p.cover_code:''}</span>` : ''}
+          ${p.language   ? `<span class="badge badge-lang">${p.language}</span>` : ''}
+          ${p.doc_date   ? `<span class="badge badge-date">${p.doc_date}</span>` : ''}
+        </div>
+        <div class="card-subject">${p.subject||'No subject extracted'}</div>
+        <div class="card-snippet">${(p.translation||p.transcription||'').substring(0,120)}</div>
+        ${p.tags.length ? `<div class="tags-row">${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  // Pagination
+  const pag = document.getElementById('pagination');
+  pag.innerHTML = '';
+  if (offset > 0) {
+    const b = document.createElement('button');
+    b.className='btn'; b.style.background='#333'; b.style.color='#fff';
+    b.textContent='← Prev'; b.onclick=()=>doSearch(offset-PAGE_SIZE);
+    pag.appendChild(b);
+  }
+  if (offset+PAGE_SIZE < data.total) {
+    const b = document.createElement('button');
+    b.className='btn btn-primary';
+    b.textContent='Next →'; b.onclick=()=>doSearch(offset+PAGE_SIZE);
+    pag.appendChild(b);
+  }
+}
+
+// ── Groups ───────────────────────────────────────────────────────────────────
+async function loadGroups() {
+  const groups = await fetch('/api/groups').then(r=>r.json());
+  const el = document.getElementById('groups-list');
+  if (!groups.length) { el.innerHTML='<div class="empty">No groups yet. Run process.py first.</div>'; return; }
+  el.innerHTML = groups.map(g => `
+    <div class="group-item" onclick="openGroup(${g.group_number})">
+      <div class="group-title">
+        ${g.cover_code ? `<span style="color:var(--accent)">${g.cover_code}</span> — ` : ''}
+        ${g.title||'Untitled group'}
+        <span style="float:right;font-size:.78rem;color:var(--muted)">${g.photo_count} photos</span>
+      </div>
+      <div class="group-meta">
+        ${g.doc_date?`📅 ${g.doc_date} &nbsp;`:''}
+        Photos #${g.first_index}–${g.last_index||'?'}
+        ${g.tags.length?`&nbsp;🏷 ${g.tags.join(', ')}`:''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openGroup(groupNum) {
+  const data = await fetch(`/api/group/${groupNum}`).then(r=>r.json());
+  // Filter search to this group
+  document.getElementById('search-q').value='';
+  switchTab('search');
+  const params = new URLSearchParams({group:groupNum,limit:PAGE_SIZE,offset:0});
+  const results = await fetch('/api/search?'+params).then(r=>r.json());
+  renderResults(results, 0);
+}
+
+// ── Detail Panel ─────────────────────────────────────────────────────────────
+function openDetail(photoId) {
+  const p = photoMap[photoId];
+  currentPhoto = p;
+  document.getElementById('detail-title').textContent = `Photo #${p.index} ${p.is_cover?'(Cover Sheet)':''}`;
+  document.getElementById('detail-img').src = p.image_url.replace('=w4096','=w800');
+  document.getElementById('detail-link').href = p.page_url;
+  renderDetailInfo(p);
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function renderDetailInfo(p) {
+  const el = document.getElementById('detail-info');
+  el.innerHTML = `
+    <div class="info-section">
+      <h3>Metadata</h3>
+      <table style="font-size:.82rem;width:100%;border-collapse:collapse">
+        <tr><td style="color:var(--muted);padding:2px 8px 2px 0">Index</td><td>#${p.index}</td></tr>
+        <tr><td style="color:var(--muted);padding:2px 8px 2px 0">File Group</td><td>${p.file_group||'—'}${p.cover_code?' ('+p.cover_code+')':''}</td></tr>
+        <tr><td style="color:var(--muted);padding:2px 8px 2px 0">Language</td><td>${p.language||'—'}</td></tr>
+        <tr><td style="color:var(--muted);padding:2px 8px 2px 0">Date</td>
+          <td><input class="date-input" value="${p.doc_date||''}" placeholder="YYYY-MM-DD" onchange="setDate(${p.id}, this.value)"></td>
+        </tr>
+        <tr><td style="color:var(--muted);padding:2px 8px 2px 0">Subject</td><td style="color:#ccc">${p.subject||'—'}</td></tr>
+      </table>
+    </div>
+    <div class="info-section">
+      <h3>Transcription (${p.language||'original'})</h3>
+      <div class="transcription-box">${escHtml(p.transcription||'Not yet transcribed')}</div>
+    </div>
+    <div class="info-section">
+      <h3>English Translation</h3>
+      <div class="translation-box">${escHtml(p.translation||'Not yet translated')}</div>
+    </div>
+    <div class="info-section">
+      <h3>Tags</h3>
+      <div class="tags-row" id="detail-tags">
+        ${p.tags.map(t=>`<span class="tag">${escHtml(t)} <span style="cursor:pointer;color:#f44" onclick="removeTag(${p.id},'${escHtml(t)}')">×</span></span>`).join('')}
+      </div>
+      <div class="tag-input-row" style="margin-top:8px">
+        <input class="tag-input" id="new-tag-input" placeholder="Add tag…" onkeydown="if(event.key==='Enter')addTag(${p.id})">
+        <button class="btn btn-tag btn-sm" onclick="addTag(${p.id})">Add</button>
+      </div>
+    </div>
+    <div class="info-section">
+      <h3>Notes</h3>
+      <textarea class="note-input" onchange="saveNote(${p.id},this.value)">${escHtml(p.notes||'')}</textarea>
+    </div>
+  `;
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  currentPhoto = null;
+}
+
+async function addTag(photoId) {
+  const input = document.getElementById('new-tag-input');
+  const tag = input.value.trim();
+  if (!tag) return;
+  const data = await fetch(`/api/photo/${photoId}/tag`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'add', tag})
+  }).then(r=>r.json());
+  input.value = '';
+  if (currentPhoto) { currentPhoto.tags = data.tags; renderDetailInfo(currentPhoto); }
+}
+
+async function removeTag(photoId, tag) {
+  const data = await fetch(`/api/photo/${photoId}/tag`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'remove', tag})
+  }).then(r=>r.json());
+  if (currentPhoto) { currentPhoto.tags = data.tags; renderDetailInfo(currentPhoto); }
+}
+
+async function saveNote(photoId, note) {
+  await fetch(`/api/photo/${photoId}/note`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({note})
+  });
+}
+
+async function setDate(photoId, doc_date) {
+  await fetch(`/api/photo/${photoId}/date`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({doc_date})
+  });
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active', ['search','groups'][i]===tab);
+  });
+  document.getElementById('tab-search').style.display = tab==='search' ? '' : 'none';
+  document.getElementById('tab-groups').style.display = tab==='groups' ? '' : 'none';
+  if (tab==='groups') loadGroups();
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Init
+loadStats();
+doSearch();
+</script>
+</body>
+</html>
