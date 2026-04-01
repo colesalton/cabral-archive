@@ -232,16 +232,19 @@ function renderResults(data, offset) {
 }
 
 // ── Groups ───────────────────────────────────────────────────────────────────
+let expandedGroup = null;
+
 async function loadGroups() {
   const groups = await fetch('/api/groups').then(r=>r.json());
   const el = document.getElementById('groups-list');
   if (!groups.length) { el.innerHTML='<div class="empty">No groups yet. Run process.py first.</div>'; return; }
   el.innerHTML = groups.map(g => `
-    <div class="group-item" onclick="openGroup(${g.group_number})">
+    <div class="group-item" id="group-${g.group_number}" onclick="toggleGroup(${g.group_number}, this)">
       <div class="group-title">
+        <span style="color:var(--muted);margin-right:6px" id="arrow-${g.group_number}">▶</span>
         ${g.cover_code ? `<span style="color:var(--accent)">${g.cover_code}</span> — ` : ''}
-        ${g.title||'Untitled group'}
-        <span style="float:right;font-size:.78rem;color:var(--muted)">${g.photo_count} photos</span>
+        ${escHtml(g.title||'Untitled group')}
+        <span style="float:right;font-size:.78rem;color:var(--muted)">${g.photo_count} pages</span>
       </div>
       <div class="group-meta">
         ${g.doc_date?`📅 ${g.doc_date} &nbsp;`:''}
@@ -249,17 +252,43 @@ async function loadGroups() {
         ${g.tags.length?`&nbsp;🏷 ${g.tags.join(', ')}`:''}
       </div>
     </div>
+    <div id="group-pages-${g.group_number}" style="display:none;margin:0 0 12px 0;background:#0d1b2a;border-radius:0 0 6px 6px;border:1px solid #1a3a5a;border-top:none;padding:10px"></div>
   `).join('');
 }
 
-async function openGroup(groupNum) {
+async function toggleGroup(groupNum, el) {
+  const pagesEl = document.getElementById(`group-pages-${groupNum}`);
+  const arrow   = document.getElementById(`arrow-${groupNum}`);
+  const isOpen  = pagesEl.style.display !== 'none';
+
+  if (isOpen) {
+    pagesEl.style.display = 'none';
+    arrow.textContent = '▶';
+    return;
+  }
+
+  arrow.textContent = '▼';
+  pagesEl.style.display = 'block';
+  pagesEl.innerHTML = '<div style="color:var(--muted);padding:8px">Loading…</div>';
+
   const data = await fetch(`/api/group/${groupNum}`).then(r=>r.json());
-  // Filter search to this group
-  document.getElementById('search-q').value='';
-  switchTab('search');
-  const params = new URLSearchParams({group:groupNum,limit:PAGE_SIZE,offset:0});
-  const results = await fetch('/api/search?'+params).then(r=>r.json());
-  renderResults(results, 0);
+  photoMap = {...photoMap};
+  data.photos.forEach(p => photoMap[p.id] = p);
+
+  pagesEl.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${data.photos.map((p,i) => `
+        <div onclick="openDetail(${p.id})" style="width:160px;background:var(--card);border-radius:6px;overflow:hidden;cursor:pointer;border:${p.is_cover?'2px solid var(--accent)':'1px solid #1a3a5a'};transition:.15s" onmouseover="this.style.borderColor='#4a8adf'" onmouseout="this.style.borderColor='${p.is_cover?'var(--accent)':'#1a3a5a'}'">
+          <img src="${p.image_url ? p.image_url.replace('=w4096','=w300') : ''}" style="width:100%;height:110px;object-fit:cover;background:#0d2137" onerror="this.style.background='#0d2137'">
+          <div style="padding:6px 8px">
+            <div style="font-size:.72rem;color:var(--muted)">Page ${i+1} · #${p.index}</div>
+            ${p.is_cover ? '<div style="font-size:.7rem;color:var(--accent);font-weight:700">COVER SHEET</div>' : ''}
+            <div style="font-size:.72rem;color:#aaa;margin-top:2px;line-height:1.3;max-height:42px;overflow:hidden">${escHtml((p.translation||p.transcription||'').substring(0,80))}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 // ── Detail Panel ─────────────────────────────────────────────────────────────
