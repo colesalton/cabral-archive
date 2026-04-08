@@ -4,12 +4,132 @@ Amilcar Cabral Archive — Search & Tagging Web App
 Run: python app.py   then open http://localhost:5000
 """
 
-import json, sqlite3
+import json, re, sqlite3, threading, time
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+import requests
 
 DB_PATH = Path(__file__).parent / "archive.db"
 app = Flask(__name__)
+
+# ── Google Photos URL Refresh ─────────────────────────────────────────────────
+# Image URLs from Google Photos expire, so we refresh them on every cold start
+# in a background thread so the app stays responsive immediately.
+
+ALBUM_ID  = "AF1QipPF6G7g8w3a2nIMVElvLFRvoCSChj9oTCDHBipVYECS2kLi9f4qIpGKF9vi8DYVTQ"
+ALBUM_KEY = "WUUtNko0alphMUFMQ3h3MTZsSHRzRDJRMzZub21B"
+ALBUM_URL = f"https://photos.google.com/share/{ALBUM_ID}?key={ALBUM_KEY}"
+GPHOTO_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+def _parse_photos(data, start_index=1):
+    photos = []
+    for idx, item in enumerate(data[1]):
+        photo_id = item[0]
+        img_base = item[1][0]
+        photos.append({
+            "index_in_album": start_index + idx,
+            "photo_id": photo_id,
+            "image_url": img_base + "=w4096",
+        })
+    return photos, data[2]  # photos + next_page_token
+
+def _fetch_next_page(session, token, sid, bl, count_so_far):
+    inner = [token, None, None, None, None, None, None,
+             [ALBUM_ID], None, None, None, None, None,
+             None, None, None, None, None, None, None, None, [ALBUM_KEY]]
+    body = json.dumps([[["x5vKt", json.dumps(inner), None, "generic"]]])
+    url  = (f"https://photos.google.com/_/PhotosUi/data/batchexecute"
+            f"?rpcids=x5vKt&source-path=%2Fshare%2F{ALBUM_ID}"
+            f"&f.sid={sid}&bl={bl}&hl=en-US"
+            f"&soc-app=165&soc-platform=1&soc-device=1&_reqid=99999&rt=c")
+    resp = session.post(url,
+        data={"f.req": body},
+        headers={**GPHOTO_HEADERS, "content-type": "application/x-www-form-urlencoded;charset=UTF-8"},
+        timeout=30)
+    resp.raise_for_status()
+    text = re.sub(r"^\)\]\}'\r?\n", "", resp.text)
+    inner_json = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            outer = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(outer, list):
+            continue
+        for entry in outer:
+            if isinstance(entry, list) and len(entry) >= 3 and entry[0] == "x5vKt":
+                try:
+                    inner_json = json.loads(entry[2])
+                except Exception:
+                    pass
+                break
+        if inner_json:
+            break
+    if not inner_json or not inner_json[1]:
+        return [], None
+    return _parse_photos(inner_json, start_index=count_so_far + 1)
+
+def _fetch_all_urls():
+    """Fetch fresh image URLs for every photo in the album."""
+    session = requests.Session()
+    resp = session.get(ALBUM_URL, headers=GPHOTO_HEADERS, timeout=30)
+    resp.raise_for_status()
+    html = resp.text
+    m = re.search(r"AF_initDataCallback\(\{key: 'ds:1', hash: '\d+', data:([\s\S]+?), sideChannel", html)
+    if not m:
+        raise ValueError("Could not parse album data from Google Photos page.")
+    data = json.loads(m.group(1))
+    sid = (re.search(r'"FdrFJe":"(-?\d+)"', html) or type("", (), {"group": lambda s, n: ""})()).group(1)
+    bl  = (re.search(r'"cfb2h":"([^"]+)"',  html) or type("", (), {"group": lambda s, n: ""})()).group(1)
+    photos, next_token = _parse_photos(data, start_index=1)
+    page = 2
+    while next_token:
+        try:
+            more, next_token = _fetch_next_page(session, next_token, sid, bl, len(photos))
+            if not more:
+                break
+            photos.extend(more)
+            page += 1
+            time.sleep(0.3)
+        except Exception as e:
+            print(f"[url-refresh] Pagination stopped at page {page}: {e}")
+            break
+    return photos
+
+def _refresh_urls_background():
+    """Background thread: fetch fresh Google Photos URLs and update the DB."""
+    try:
+        print("[url-refresh] Starting image URL refresh...")
+        photos = _fetch_all_urls()
+        conn = sqlite3.connect(DB_PATH)
+        updated = 0
+        for p in photos:
+            rows = conn.execute(
+                "UPDATE photos SET image_url=? WHERE photo_id=?",
+                (p["image_url"], p["photo_id"])
+            ).rowcount
+            updated += rows
+        conn.commit()
+        conn.close()
+        print(f"[url-refresh] Done — refreshed {updated} URLs across {len(photos)} album photos.")
+    except Exception as e:
+        print(f"[url-refresh] Failed: {e}")
+
+# Kick off URL refresh in the background as soon as the module loads
+if DB_PATH.exists():
+    threading.Thread(target=_refresh_urls_background, daemon=True).start()
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
