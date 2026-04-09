@@ -106,23 +106,38 @@ def _fetch_all_urls():
             break
     return photos
 
+refresh_status = {"state": "not started", "fetched": 0, "updated": 0, "error": None}
+
 def _refresh_urls_background():
     """Background thread: fetch fresh Google Photos URLs and update the DB."""
+    global refresh_status
+    refresh_status = {"state": "running", "fetched": 0, "updated": 0, "error": None}
     try:
         print("[url-refresh] Starting image URL refresh...")
         photos = _fetch_all_urls()
+        refresh_status["fetched"] = len(photos)
+        print(f"[url-refresh] Fetched {len(photos)} photo URLs from album, updating DB...")
+
         conn = sqlite3.connect(DB_PATH)
         updated = 0
-        for p in photos:
+        for i, p in enumerate(photos):
             rows = conn.execute(
                 "UPDATE photos SET image_url=? WHERE photo_id=?",
                 (p["image_url"], p["photo_id"])
             ).rowcount
             updated += rows
+            # Commit every 100 rows so partial progress is saved
+            if (i + 1) % 100 == 0:
+                conn.commit()
+                print(f"[url-refresh] Committed {i+1}/{len(photos)}...")
         conn.commit()
         conn.close()
+        refresh_status["updated"] = updated
+        refresh_status["state"] = "done"
         print(f"[url-refresh] Done — refreshed {updated} URLs across {len(photos)} album photos.")
     except Exception as e:
+        refresh_status["state"] = "error"
+        refresh_status["error"] = str(e)
         print(f"[url-refresh] Failed: {e}")
 
 # Kick off URL refresh in the background as soon as the module loads
@@ -346,6 +361,19 @@ def note_group(group_num):
     conn.execute("UPDATE file_groups SET notes=? WHERE group_number=?", (note, group_num))
     conn.commit(); conn.close()
     return jsonify({"ok": True})
+
+# ── Refresh ───────────────────────────────────────────────────────────────────
+
+@app.route("/api/refresh-status")
+def get_refresh_status():
+    return jsonify(refresh_status)
+
+@app.route("/api/refresh", methods=["POST"])
+def trigger_refresh():
+    if refresh_status.get("state") == "running":
+        return jsonify({"ok": False, "message": "Refresh already running"}), 409
+    threading.Thread(target=_refresh_urls_background, daemon=True).start()
+    return jsonify({"ok": True, "message": "Refresh started"})
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 
